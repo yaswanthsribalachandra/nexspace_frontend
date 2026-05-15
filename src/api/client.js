@@ -1,6 +1,6 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "http://192.168.0.10:8000";
+"https://nexspacebackend-b7d3eyc7dfdzfvda.centralindia-01.azurewebsites.net/";
 
 class ApiClient {
   getToken() {
