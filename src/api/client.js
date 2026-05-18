@@ -1,6 +1,6 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-"https://nexspacebackend-b7d3eyc7dfdzfvda.centralindia-01.azurewebsites.net/";
+"https://yaswanth-ai-agent-2026.azurewebsites.net/docs";
 
 class ApiClient {
   getToken() {
