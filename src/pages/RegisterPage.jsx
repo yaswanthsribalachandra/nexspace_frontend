@@ -10,7 +10,7 @@ import {
 
 const BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "http://192.168.0.14:8000" || "https://nexspacebackend-b7d3eyc7dfdzfvda.centralindia-01.azurewebsites.net/";
+  "https://yaswanth-ai-agent-2026.azurewebsites.net/docs";
 
 export default function RegisterPage({
   onRegister,
