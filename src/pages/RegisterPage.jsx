@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   Eye,
   EyeOff,
@@ -8,14 +9,27 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const BASE_URL =
+// ======================================================
+// BASE URL
+// ======================================================
+
+const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
   "https://yaswanth-ai-agent-2026.azurewebsites.net";
+
+// ======================================================
+// COMPONENT
+// ======================================================
 
 export default function RegisterPage({
   onRegister,
   onSwitchToLogin,
 }) {
+
+  // ======================================================
+  // STATES
+  // ======================================================
+
   const [fullName, setFullName] =
     useState("");
 
@@ -65,222 +79,332 @@ export default function RegisterPage({
     setShowConfirmPassword,
   ] = useState(false);
 
-  // SEND OTP
-  const sendOtp = async () => {
-    if (!email) {
-      setError(
-        "Please enter your email"
-      );
-      return;
-    }
+  // ======================================================
+  // API HELPER
+  // ======================================================
+
+  const apiRequest = async (
+    endpoint,
+    method = "GET",
+    body = null
+  ) => {
 
     try {
-      setSendingOtp(true);
-      setError("");
-      setSuccess("");
 
       const response = await fetch(
-        `${BASE_URL}/api/auth/send-otp`,
+        `${API_BASE_URL}${endpoint}`,
         {
-          method: "POST",
+          method,
           headers: {
             "Content-Type":
               "application/json",
           },
-          body: JSON.stringify({
-            email,
-          }),
+          body: body
+            ? JSON.stringify(body)
+            : null,
         }
       );
 
-      const data =
-        await response.json();
+      let data = {};
+
+      try {
+
+        data =
+          await response.json();
+
+      } catch {
+
+        data = {};
+      }
 
       if (!response.ok) {
+
         throw new Error(
           data.detail ||
-            "Failed to send OTP"
+          data.message ||
+          `Server Error (${response.status})`
         );
       }
+
+      return data;
+
+    } catch (error) {
+
+      console.error(
+        "API ERROR:",
+        error
+      );
+
+      throw error;
+    }
+  };
+
+  // ======================================================
+  // SEND OTP
+  // ======================================================
+
+  const sendOtp = async () => {
+
+    if (!email) {
+
+      setError(
+        "Please enter email"
+      );
+
+      return;
+    }
+
+    try {
+
+      setSendingOtp(true);
+
+      setError("");
+      setSuccess("");
+
+      const data =
+        await apiRequest(
+          "/api/auth/send-otp",
+          "POST",
+          {
+            email,
+          }
+        );
 
       setOtpSent(true);
 
       setSuccess(
+        data.message ||
         "OTP sent successfully"
       );
+
     } catch (err) {
+
       setError(
         err.message ||
-          "Failed to send OTP"
+        "Failed to send OTP"
       );
+
     } finally {
+
       setSendingOtp(false);
     }
   };
 
+  // ======================================================
   // VERIFY OTP
+  // ======================================================
+
   const verifyOtp = async () => {
+
     if (!otp) {
+
       setError("Enter OTP");
+
       return;
     }
 
     try {
+
       setError("");
       setSuccess("");
 
-      const response = await fetch(
-        `${BASE_URL}/api/auth/verify-otp`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
+      const data =
+        await apiRequest(
+          "/api/auth/verify-otp",
+          "POST",
+          {
             email,
             otp,
-          }),
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail ||
-            "Invalid OTP"
+          }
         );
-      }
 
       setOtpVerified(true);
 
       setSuccess(
-        "Email verified successfully"
+        data.message ||
+        "OTP verified successfully"
       );
+
     } catch (err) {
+
       setError(
         err.message ||
-          "OTP verification failed"
+        "OTP verification failed"
       );
     }
   };
 
+  // ======================================================
   // REGISTER
+  // ======================================================
+
   const handleSubmit = async (
     e
   ) => {
+
     e.preventDefault();
 
     setError("");
     setSuccess("");
 
+    // ======================================================
+    // VALIDATIONS
+    // ======================================================
+
+    if (!fullName.trim()) {
+
+      setError(
+        "Full name required"
+      );
+
+      return;
+    }
+
     if (
       password !==
       confirmPassword
     ) {
+
       setError(
         "Passwords do not match"
       );
+
       return;
     }
 
     if (password.length < 6) {
+
       setError(
         "Password must be at least 6 characters"
       );
+
       return;
     }
 
     if (!otpVerified) {
+
       setError(
-        "Please verify your email first"
+        "Please verify email first"
       );
+
       return;
     }
 
-    setLoading(true);
+    // ======================================================
+    // REGISTER API
+    // ======================================================
 
     try {
-      const response = await fetch(
-        `${BASE_URL}/api/auth/register`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
+
+      setLoading(true);
+
+      const data =
+        await apiRequest(
+          "/api/auth/register",
+          "POST",
+          {
             full_name: fullName,
             email,
             password,
-          }),
-        }
+          }
+        );
+
+      console.log(
+        "REGISTER SUCCESS:",
+        data
       );
 
-      const data =
-        await response.json();
+      // ======================================================
+      // STORE TOKEN
+      // ======================================================
 
-      if (!response.ok) {
-        throw new Error(
-          data.detail ||
-            "Registration failed"
+      if (
+        data.access_token
+      ) {
+
+        localStorage.setItem(
+          "token",
+          data.access_token
+        );
+
+        setSuccess(
+          "Registration successful"
+        );
+
+        if (onRegister) {
+
+          onRegister(
+            data.access_token
+          );
+        }
+
+      } else {
+
+        setError(
+          "Token not received"
         );
       }
 
-      localStorage.setItem(
-        "token",
-        data.access_token
+    } catch (err) {
+
+      console.error(
+        "REGISTER ERROR:",
+        err
       );
 
-      onRegister(
-        data.access_token
-      );
-    } catch (err) {
       setError(
         err.message ||
-          "Something went wrong"
+        "Registration failed"
       );
+
     } finally {
+
       setLoading(false);
     }
   };
 
+  // ======================================================
+  // UI
+  // ======================================================
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-800 to-black flex items-center justify-center p-4">
+
       <div className="w-full max-w-md">
+
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+
           {/* HEADER */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-8 text-white text-center relative overflow-hidden">
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute -top-10 -left-10 w-40 h-40 bg-white rounded-full"></div>
 
-              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white rounded-full"></div>
+          <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-8 text-white text-center">
+
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl mb-4">
+
+              <ShieldCheck className="w-8 h-8" />
+
             </div>
 
-            <div className="relative z-10">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl mb-4 border border-white/20">
-                <ShieldCheck className="w-8 h-8 text-white" />
-              </div>
+            <h1 className="text-3xl font-bold">
+              Create Account
+            </h1>
 
-              <h1 className="text-3xl font-bold">
-                Create Account
-              </h1>
+            <p className="text-blue-100 mt-2">
+              Join NexSpace today
+            </p>
 
-              <p className="text-blue-100 mt-2">
-                Join NexSpace today
-              </p>
-            </div>
           </div>
 
           {/* FORM */}
+
           <div className="p-8">
+
             <form
               onSubmit={handleSubmit}
               className="space-y-5"
             >
+
               {/* ERROR */}
+
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
                   {error}
@@ -288,6 +412,7 @@ export default function RegisterPage({
               )}
 
               {/* SUCCESS */}
+
               {success && (
                 <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
                   {success}
@@ -295,12 +420,15 @@ export default function RegisterPage({
               )}
 
               {/* FULL NAME */}
+
               <div>
+
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Full Name
                 </label>
 
                 <div className="relative">
+
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
 
                   <input
@@ -312,20 +440,26 @@ export default function RegisterPage({
                       )
                     }
                     placeholder="John Doe"
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300"
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
+
                 </div>
+
               </div>
 
               {/* EMAIL */}
+
               <div>
+
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Email Address
                 </label>
 
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex gap-2">
+
                   <div className="relative flex-1">
+
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
 
                     <input
@@ -337,18 +471,17 @@ export default function RegisterPage({
                         )
                       }
                       placeholder="you@example.com"
-                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300"
+                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
+
                   </div>
 
                   <button
                     type="button"
                     onClick={sendOtp}
-                    disabled={
-                      sendingOtp
-                    }
-                    className="sm:min-w-[130px] px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50"
+                    disabled={sendingOtp}
+                    className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold disabled:opacity-50"
                   >
                     {sendingOtp
                       ? "Sending..."
@@ -356,53 +489,40 @@ export default function RegisterPage({
                       ? "Resend"
                       : "Send OTP"}
                   </button>
+
                 </div>
+
               </div>
 
               {/* OTP */}
+
               {otpSent && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+
+                <div>
+
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Verification Code
+                    OTP
                   </label>
 
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="relative flex-1">
-                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <div className="flex gap-2">
 
-                      <input
-                        type="text"
-                        value={otp}
-                        onChange={(e) =>
-                          setOtp(
-                            e.target.value
-                          )
-                        }
-                        placeholder="Enter OTP"
-                        maxLength={6}
-                        className={`w-full pl-12 pr-4 py-3 border rounded-xl text-gray-900 placeholder:text-gray-400 outline-none transition-all duration-300 ${
-                          otpVerified
-                            ? "border-green-500 focus:ring-2 focus:ring-green-500"
-                            : "border-gray-300 focus:ring-2 focus:ring-blue-500"
-                        }`}
-                      />
-
-                      {otpVerified && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-600 font-bold">
-                          ✓
-                        </div>
-                      )}
-                    </div>
+                    <input
+                      type="text"
+                      value={otp}
+                      onChange={(e) =>
+                        setOtp(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Enter OTP"
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                    />
 
                     <button
                       type="button"
-                      onClick={
-                        verifyOtp
-                      }
-                      disabled={
-                        otpVerified
-                      }
-                      className={`sm:min-w-[120px] px-4 py-3 rounded-xl font-semibold text-white transition-all duration-300 ${
+                      onClick={verifyOtp}
+                      disabled={otpVerified}
+                      className={`px-4 py-3 rounded-xl text-white font-semibold ${
                         otpVerified
                           ? "bg-green-500"
                           : "bg-green-600 hover:bg-green-700"
@@ -412,17 +532,22 @@ export default function RegisterPage({
                         ? "Verified"
                         : "Verify"}
                     </button>
+
                   </div>
+
                 </div>
               )}
 
               {/* PASSWORD */}
+
               <div>
+
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Password
                 </label>
 
                 <div className="relative">
+
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
 
                   <input
@@ -438,7 +563,7 @@ export default function RegisterPage({
                       )
                     }
                     placeholder="••••••••"
-                    className="w-full pl-12 pr-14 py-3 border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300"
+                    className="w-full pl-12 pr-14 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
 
@@ -449,7 +574,7 @@ export default function RegisterPage({
                         !showPassword
                       )
                     }
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-600 transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2"
                   >
                     {showPassword ? (
                       <EyeOff className="w-5 h-5" />
@@ -457,16 +582,21 @@ export default function RegisterPage({
                       <Eye className="w-5 h-5" />
                     )}
                   </button>
+
                 </div>
+
               </div>
 
               {/* CONFIRM PASSWORD */}
+
               <div>
+
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Confirm Password
                 </label>
 
                 <div className="relative">
+
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
 
                   <input
@@ -475,16 +605,14 @@ export default function RegisterPage({
                         ? "text"
                         : "password"
                     }
-                    value={
-                      confirmPassword
-                    }
+                    value={confirmPassword}
                     onChange={(e) =>
                       setConfirmPassword(
                         e.target.value
                       )
                     }
                     placeholder="••••••••"
-                    className="w-full pl-12 pr-14 py-3 border border-gray-300 rounded-xl text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300"
+                    className="w-full pl-12 pr-14 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
 
@@ -495,7 +623,7 @@ export default function RegisterPage({
                         !showConfirmPassword
                       )
                     }
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-600 transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2"
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="w-5 h-5" />
@@ -503,40 +631,51 @@ export default function RegisterPage({
                       <Eye className="w-5 h-5" />
                     )}
                   </button>
+
                 </div>
+
               </div>
 
               {/* SUBMIT */}
+
               <button
                 type="submit"
                 disabled={
                   loading ||
                   !otpVerified
                 }
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-xl disabled:opacity-50 disabled:hover:scale-100"
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-bold py-3.5 rounded-xl disabled:opacity-50"
               >
                 {loading
                   ? "Creating Account..."
                   : "Create Account"}
               </button>
+
             </form>
 
             {/* FOOTER */}
+
             <p className="text-center text-gray-600 mt-6 text-sm">
-              Already have an
-              account?{" "}
+
+              Already have an account?{" "}
+
               <button
                 onClick={
                   onSwitchToLogin
                 }
-                className="text-blue-600 hover:text-blue-700 font-semibold hover:underline"
+                className="text-blue-600 font-semibold hover:underline"
               >
                 Login here
               </button>
+
             </p>
+
           </div>
+
         </div>
+
       </div>
+
     </div>
   );
 }
