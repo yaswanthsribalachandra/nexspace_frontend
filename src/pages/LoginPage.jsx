@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import {
   Eye,
   EyeOff,
@@ -7,15 +8,28 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const BASE_URL =
+// ======================================================
+// API BASE URL
+// ======================================================
+
+const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
   "https://yaswanth-ai-agent-2026.azurewebsites.net";
+
+// ======================================================
+// COMPONENT
+// ======================================================
 
 export default function LoginPage({
   onLogin,
   onSwitchToRegister,
   onSwitchToForgotPassword,
 }) {
+
+  // ======================================================
+  // STATES
+  // ======================================================
+
   const [email, setEmail] =
     useState("");
 
@@ -50,7 +64,10 @@ export default function LoginPage({
     setShowPassword,
   ] = useState(false);
 
-  // AUTO LOGIN AFTER REFRESH
+  // ======================================================
+  // AUTO LOGIN
+  // ======================================================
+
   useEffect(() => {
 
     const savedToken =
@@ -58,18 +75,94 @@ export default function LoginPage({
         "token"
       );
 
-    if (savedToken) {
+    if (
+      savedToken &&
+      onLogin
+    ) {
+
       onLogin(savedToken);
     }
 
   }, []);
 
+  // ======================================================
+  // API HELPER
+  // ======================================================
+
+  const apiRequest = async (
+    endpoint,
+    method = "GET",
+    body = null
+  ) => {
+
+    try {
+
+      console.log(
+        "API CALL:",
+        `${API_BASE_URL}${endpoint}`
+      );
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}${endpoint}`,
+          {
+            method,
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: body
+              ? JSON.stringify(body)
+              : null,
+          }
+        );
+
+      let data = {};
+
+      try {
+
+        data =
+          await response.json();
+
+      } catch {
+
+        data = {};
+      }
+
+      if (!response.ok) {
+
+        throw new Error(
+          data.detail ||
+          data.message ||
+          `Server Error (${response.status})`
+        );
+      }
+
+      return data;
+
+    } catch (error) {
+
+      console.error(
+        "API ERROR:",
+        error
+      );
+
+      throw error;
+    }
+  };
+
+  // ======================================================
   // SEND OTP
+  // ======================================================
+
   const sendOtp = async () => {
 
     if (!email) {
+
       setError(
-        "Please enter your email"
+        "Please enter email"
       );
 
       return;
@@ -78,39 +171,23 @@ export default function LoginPage({
     try {
 
       setSendingOtp(true);
+
       setError("");
       setSuccess("");
 
-      const response =
-        await fetch(
-          `${BASE_URL}/api/auth/send-otp`,
+      const data =
+        await apiRequest(
+          "/api/auth/send-otp",
+          "POST",
           {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              email,
-            }),
+            email,
           }
         );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail ||
-            "Failed to send OTP"
-        );
-      }
 
       setOtpSent(true);
 
       setSuccess(
+        data.message ||
         "OTP sent successfully"
       );
 
@@ -118,17 +195,19 @@ export default function LoginPage({
 
       setError(
         err.message ||
-          "Failed to send OTP"
+        "Failed to send OTP"
       );
 
     } finally {
 
       setSendingOtp(false);
-
     }
   };
 
+  // ======================================================
   // LOGIN
+  // ======================================================
+
   const handleSubmit = async (
     e
   ) => {
@@ -137,92 +216,119 @@ export default function LoginPage({
 
     setError("");
     setSuccess("");
-    setLoading(true);
 
     try {
 
-      let response;
+      setLoading(true);
 
+      let data;
+
+      // ======================================================
       // OTP LOGIN
+      // ======================================================
+
       if (useOtp) {
 
-        response = await fetch(
-          `${BASE_URL}/api/auth/login-otp`,
-          {
-            method: "POST",
+        if (!otp) {
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+          setError(
+            "Please enter OTP"
+          );
 
-            body: JSON.stringify({
+          setLoading(false);
+
+          return;
+        }
+
+        data =
+          await apiRequest(
+            "/api/auth/login-otp",
+            "POST",
+            {
               email,
               otp,
-            }),
-          }
-        );
+            }
+          );
 
       }
 
+      // ======================================================
       // PASSWORD LOGIN
+      // ======================================================
+
       else {
 
-        response = await fetch(
-          `${BASE_URL}/api/auth/login`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
+        data =
+          await apiRequest(
+            "/api/auth/login",
+            "POST",
+            {
               email,
               password,
-            }),
-          }
-        );
-
+            }
+          );
       }
 
-      const data =
-        await response.json();
+      console.log(
+        "LOGIN SUCCESS:",
+        data
+      );
 
-      if (!response.ok) {
-        throw new Error(
-          data.detail ||
-            "Login failed"
-        );
-      }
-
+      // ======================================================
       // SAVE TOKEN
-      localStorage.setItem(
-        "token",
-        data.access_token
-      );
+      // ======================================================
 
-      // LOGIN USER
-      onLogin(
+      if (
         data.access_token
-      );
+      ) {
+
+        localStorage.setItem(
+          "token",
+          data.access_token
+        );
+
+        setSuccess(
+          "Login successful"
+        );
+
+        if (onLogin) {
+
+          onLogin(
+            data.access_token
+          );
+        }
+
+      } else {
+
+        setError(
+          "Token not received"
+        );
+      }
 
     } catch (err) {
 
+      console.error(
+        "LOGIN ERROR:",
+        err
+      );
+
       setError(
         err.message ||
-          "Something went wrong"
+        "Login failed"
       );
 
     } finally {
 
       setLoading(false);
-
     }
   };
 
+  // ======================================================
+  // UI
+  // ======================================================
+
   return (
+
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-800 to-black flex items-center justify-center p-4">
 
       <div className="w-full max-w-md">
@@ -230,61 +336,43 @@ export default function LoginPage({
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
 
           {/* HEADER */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-8 text-white text-center relative overflow-hidden">
 
-            <div className="absolute inset-0 opacity-10">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-8 text-white text-center">
 
-              <div className="absolute -top-10 -left-10 w-40 h-40 bg-white rounded-full"></div>
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl mb-4">
 
-              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white rounded-full"></div>
-
-            </div>
-
-            <div className="relative z-10">
-
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl mb-4 border border-white/20">
-
-                <svg
-                  className="w-8 h-8 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.658 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                  />
-                </svg>
-
-              </div>
-
-              <h1 className="text-3xl font-bold">
-                NexSpace
-              </h1>
-
-              <p className="text-blue-100 mt-2">
-                Welcome back
-              </p>
+              <ShieldCheck className="w-8 h-8" />
 
             </div>
+
+            <h1 className="text-3xl font-bold">
+              NexSpace
+            </h1>
+
+            <p className="text-blue-100 mt-2">
+              Welcome Back
+            </p>
+
           </div>
 
-          {/* FORM */}
+          {/* BODY */}
+
           <div className="p-8">
 
-            {/* LOGIN MODE SWITCH */}
+            {/* LOGIN MODE */}
+
             <div className="flex bg-gray-100 rounded-2xl p-1 mb-6">
 
               <button
                 type="button"
                 onClick={() => {
+
                   setUseOtp(false);
+
                   setError("");
                   setSuccess("");
                 }}
-                className={`flex-1 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
+                className={`flex-1 py-2.5 rounded-xl font-semibold transition-all ${
                   !useOtp
                     ? "bg-white shadow text-blue-600"
                     : "text-gray-600"
@@ -296,11 +384,13 @@ export default function LoginPage({
               <button
                 type="button"
                 onClick={() => {
+
                   setUseOtp(true);
+
                   setError("");
                   setSuccess("");
                 }}
-                className={`flex-1 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
+                className={`flex-1 py-2.5 rounded-xl font-semibold transition-all ${
                   useOtp
                     ? "bg-white shadow text-blue-600"
                     : "text-gray-600"
@@ -312,12 +402,14 @@ export default function LoginPage({
             </div>
 
             {/* FORM */}
+
             <form
               onSubmit={handleSubmit}
               className="space-y-5"
             >
 
               {/* ERROR */}
+
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
                   {error}
@@ -325,6 +417,7 @@ export default function LoginPage({
               )}
 
               {/* SUCCESS */}
+
               {success && (
                 <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
                   {success}
@@ -332,6 +425,7 @@ export default function LoginPage({
               )}
 
               {/* EMAIL */}
+
               <div>
 
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -339,7 +433,8 @@ export default function LoginPage({
                 </label>
 
                 {useOtp ? (
-                  <div className="flex flex-col sm:flex-row gap-2">
+
+                  <div className="flex gap-2">
 
                     <div className="relative flex-1">
 
@@ -354,7 +449,7 @@ export default function LoginPage({
                           )
                         }
                         placeholder="you@example.com"
-                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300"
+                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                         required
                       />
 
@@ -362,13 +457,9 @@ export default function LoginPage({
 
                     <button
                       type="button"
-                      onClick={
-                        sendOtp
-                      }
-                      disabled={
-                        sendingOtp
-                      }
-                      className="sm:min-w-[120px] px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50"
+                      onClick={sendOtp}
+                      disabled={sendingOtp}
+                      className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold disabled:opacity-50"
                     >
                       {sendingOtp
                         ? "Sending..."
@@ -378,7 +469,9 @@ export default function LoginPage({
                     </button>
 
                   </div>
+
                 ) : (
+
                   <div className="relative">
 
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -392,20 +485,23 @@ export default function LoginPage({
                         )
                       }
                       placeholder="you@example.com"
-                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300"
+                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
 
                   </div>
                 )}
+
               </div>
 
               {/* OTP FIELD */}
+
               {useOtp && otpSent && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+
+                <div>
 
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Verification Code
+                    OTP
                   </label>
 
                   <div className="relative">
@@ -422,16 +518,18 @@ export default function LoginPage({
                       }
                       placeholder="Enter OTP"
                       maxLength={6}
-                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300"
-                      required
+                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                     />
 
                   </div>
+
                 </div>
               )}
 
-              {/* PASSWORD FIELD */}
+              {/* PASSWORD */}
+
               {!useOtp && (
+
                 <div>
 
                   <div className="flex justify-between items-center mb-2">
@@ -445,7 +543,7 @@ export default function LoginPage({
                       onClick={
                         onSwitchToForgotPassword
                       }
-                      className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                      className="text-sm text-blue-600 hover:underline"
                     >
                       Forgot Password?
                     </button>
@@ -469,7 +567,7 @@ export default function LoginPage({
                         )
                       }
                       placeholder="••••••••"
-                      className="w-full pl-12 pr-14 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300"
+                      className="w-full pl-12 pr-14 py-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
 
@@ -480,7 +578,7 @@ export default function LoginPage({
                           !showPassword
                         )
                       }
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-600 transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2"
                     >
                       {showPassword ? (
                         <EyeOff className="w-5 h-5" />
@@ -490,10 +588,12 @@ export default function LoginPage({
                     </button>
 
                   </div>
+
                 </div>
               )}
 
               {/* SUBMIT */}
+
               <button
                 type="submit"
                 disabled={
@@ -501,7 +601,7 @@ export default function LoginPage({
                   (useOtp &&
                     !otpSent)
                 }
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-xl disabled:opacity-50 disabled:hover:scale-100"
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white font-bold py-3.5 rounded-xl disabled:opacity-50"
               >
                 {loading
                   ? useOtp
@@ -515,16 +615,16 @@ export default function LoginPage({
             </form>
 
             {/* FOOTER */}
+
             <p className="text-center text-gray-600 mt-6 text-sm">
 
-              Don't have an
-              account?{" "}
+              Don’t have an account?{" "}
 
               <button
                 onClick={
                   onSwitchToRegister
                 }
-                className="text-blue-600 hover:text-blue-700 font-semibold hover:underline"
+                className="text-blue-600 font-semibold hover:underline"
               >
                 Register here
               </button>
@@ -532,8 +632,11 @@ export default function LoginPage({
             </p>
 
           </div>
+
         </div>
+
       </div>
+
     </div>
   );
 }
